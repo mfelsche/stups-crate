@@ -1,0 +1,136 @@
+SenzaInfo:
+    StackName: crate
+    Parameters:
+        - ImageVersion:
+            Description: "stups-crate DockerImage Version to use, corresponds to crate release version"
+        - ApplicationId:
+            Description: "The application id according to yourturn"
+        - MintBucket:
+            Description: The Mint bucket to use for getting credentials and stuff
+        - ClusterSize:
+            Description: "intended initial size of the cluster"
+            Default: "3"
+        - MinimumMasterNodes:
+            Description: "The minimum of master nodes necessary to form a cluster (use a quorum of your clusterSize here)"
+            Default: "2"
+        - ClusterName:
+            Description: "name of the crate cluster"
+            Default: "{{SenzaInfo.StackVersion}}" # defaults to stack version, 
+                                                  # so crate nodes of different deployments 
+                                                  # do not see each other
+        - HeapSize:
+            Description: "JVM Heap size for Crate (use half of available RAM but less than 32GB)"
+            Default: "2g"
+        - AvailabilityZones:
+            Description: "AWS Availability Zones the Crate cluster nodes run in"
+            Default:
+                - "eu-west-1a"
+                - "eu-west-1b"
+                - "eu-west-1c"
+            # crate can discover peer nodes within different regions
+            # so many more could be listed
+        - ScalyrAccountKey:
+            Description: "scalyr account key"
+            Default: "NOT USED"
+SenzaComponents:
+    - Configuration:
+        Type: Senza::StupsAutoConfiguration
+        AvailabilityZones: "{{Arguments.AvailabilityZone}}"
+    - CrateCluster:
+        Type: Senza::TaupageAutoScalingGroup
+        InstanceType: "c3.2xlarge" # TODO: find recommended image
+        SecurityGroups:
+            - Fn::GetAtt:
+                - StupsCrateSg
+                - GroupId
+        IamRoles:
+            - Ref: IamRole
+        AutoScaling:
+            # we don't really autoscale dynamically
+            # add nodes by updating this stack with senza update
+            # the autoscaling group will create a new node
+            Minimum: "{{Arguments.ClusterSize}}"
+            Maximum: "{{Arguments.ClusterSize}}"
+            MetricType: CPU
+        AssociatePublicIpAddress: false
+        TaupageConfig:
+            application_id: "{{Arguments.ApplicationId}}"
+            runtime: Docker
+            networking: host
+            # TODO: put into another repo
+            source: "pierone.stups.zalan.do/mentoring/stups-crate:{{Arguments.ImageVersion}}"
+            scalyr_account_key: "{{Arguments.ScalyrAccountKey}}"
+            ports:
+                4200: 4200
+                4300: 4300
+            volumes:
+                ebs:
+                    /dev/sdk: data-volume
+            mounts:
+                /data:
+                    partition: /dev/xvdk
+                    options: noatime,nodiratime,nobarrier
+                    erase_on_boot: false # we want to keep the ebs volume 
+                                         # in case the whole cluster breaks down
+            environment:
+                CLUSTER_NAME: "{{Arguments.ClusterName}}"
+                CRATE_HEAP_SIZE: "{{Arguments.HeapSize}}"
+                AVAILABILITY_ZONES: "{{Arguments.AvailabilityZones}}"
+                AWS_SECURITY_GROUP:
+                    Fn::GetAtt:
+                        - StupsCrateSg
+                        - GroupId
+                MINIMUM_MASTER_NODES: "{{Arguments.MinimumMasterNodes}}"
+        BlockDeviceMappings:
+            - DeviceName: "/dev/xvdk"
+              Ebs:
+                  VolumeType: "gp2" # use io1 if higher performance is needed
+                  VolumeSize: 80
+    # TODO: 
+    # WeightedDnsElasticLoadBalancer
+    #       HTTPPort: 9200
+    #       HealthCheckPath: /_cluster/health
+Resources:
+    StupsCrateSg:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: "Crate exposed ports"
+            SecurityGroupIngress:
+              - IpProtocol: tcp # HTTP
+                FromPort: 4200
+                ToPort: 4200
+                CidrIp: 0.0.0.0/0
+              - IpProtocol: tcp # Transport
+                FromPort: 4300
+                ToPort: 4300
+                CidrIp: 0.0.0.0/0
+    Resources:
+          IamRole:
+              Type: AWS::IAM::Role
+              Properties:
+                  AssumeRolePolicyDocument:
+                      Version: "2012-10-17"
+                      Statement:
+                          - Effect: Allow
+                            Principal:
+                                Service: ec2.amazonaws.com
+                            Action: sts:AssumeRole
+                  Path: /
+                  Policies:
+                      - PolicyName: AmazonS3MintBucketAccess
+                        PolicyDocument:
+                            Version: "2012-10-17"
+                            Statement:
+                                - Effect: Allow
+                                  Action: s3:GetObject
+                                  Resource: "arn:aws:s3:::{{Arguments.MintBucket}}/{{Arguments.ApplicationId}}/*"
+                      - PolicyName: AmazonEC2APIAccess
+                        PolicyDocument:
+                            Version: "2012-10-17"
+                            Statement:
+                                - Effect: Allow
+                                  Action:
+                                      - ec2:DescribeInstances
+                                      - ec2:AttachVolume
+                                      - ec2:DetachVolume
+                                  Resource: "*"
