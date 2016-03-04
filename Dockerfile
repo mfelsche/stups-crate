@@ -8,7 +8,7 @@ EXPOSE 4200 4300
 
 # environment vars
 ENV DEBIAN_FRONTEND=noninteractive \
-    CRATE_VERSION=0.54.5 \
+    CRATE_VERSION=0.54.6 \
     PATH=/crate/bin:$PATH
 
 # install wget
