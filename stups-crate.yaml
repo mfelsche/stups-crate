@@ -20,7 +20,7 @@ SenzaInfo:
                                                   # do not see each other
         - HeapSize:
             Description: "JVM Heap size for Crate (use half of available RAM but less than 32GB)"
-            Default: "2g"
+            Default: "4g"
         - AvailabilityZones:
             Description: "AWS Availability Zones the Crate cluster nodes run in"
             Default:
@@ -35,10 +35,10 @@ SenzaInfo:
 SenzaComponents:
     - Configuration:
         Type: Senza::StupsAutoConfiguration
-        AvailabilityZones: "{{Arguments.AvailabilityZone}}"
+        AvailabilityZones: {{Arguments.AvailabilityZones}}
     - CrateCluster:
         Type: Senza::TaupageAutoScalingGroup
-        InstanceType: "c3.2xlarge" # TODO: find recommended image
+        InstanceType: "c3.2xlarge"
         SecurityGroups:
             - Fn::GetAtt:
                 - StupsCrateSg
@@ -64,14 +64,18 @@ SenzaComponents:
                 4200: 4200
                 4300: 4300
             volumes:
-                ebs:
-                    /dev/sdk: data-volume
+                raid:
+                    /dev/md/crate: 
+                        level: 0
+                        devices:
+                            - /dev/xvdb
+                            - /dev/xvdc
             mounts:
                 /data:
-                    partition: /dev/xvdk
+                    partition: /dev/md/crate
+                    filesystem: ext4
                     options: noatime,nodiratime,nobarrier
-                    erase_on_boot: false # we want to keep the ebs volume 
-                                         # in case the whole cluster breaks down
+                    erase_on_boot: true
             environment:
                 CLUSTER_NAME: "{{Arguments.ClusterName}}"
                 CRATE_HEAP_SIZE: "{{Arguments.HeapSize}}"
@@ -81,11 +85,6 @@ SenzaComponents:
                         - StupsCrateSg
                         - GroupId
                 MINIMUM_MASTER_NODES: "{{Arguments.MinimumMasterNodes}}"
-        BlockDeviceMappings:
-            - DeviceName: "/dev/xvdk"
-              Ebs:
-                  VolumeType: "gp2" # use io1 if higher performance is needed
-                  VolumeSize: 80
     # TODO: 
     # WeightedDnsElasticLoadBalancer
     #       HTTPPort: 9200
@@ -131,6 +130,4 @@ Resources:
                                 - Effect: Allow
                                   Action:
                                       - ec2:DescribeInstances
-                                      - ec2:AttachVolume
-                                      - ec2:DetachVolume
                                   Resource: "*"
