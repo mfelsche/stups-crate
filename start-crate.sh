@@ -6,4 +6,5 @@
 /crate/bin/crate -Des.cluster.name="$CLUSTER_NAME" \
                  -Des.discovery.ec2.groups="$AWS_SECURITY_GROUP" \
                  -Des.discovery.ec2.availability_zones="$AVAILABILITY_ZONES" \
-                 -Des.discovery.zen.minimum_master_nodes="$MINIMUM_MASTER_NODES"
+                 -Des.discovery.zen.minimum_master_nodes="$MINIMUM_MASTER_NODES" \
+                 "$@" # provide additional options using docker CMD
