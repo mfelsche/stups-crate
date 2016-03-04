@@ -9,24 +9,18 @@ SenzaInfo:
             Description: The Mint bucket to use for getting credentials and stuff
         - ClusterSize:
             Description: "intended initial size of the cluster"
-            Default: "3"
+            Default: 3
         - MinimumMasterNodes:
             Description: "The minimum of master nodes necessary to form a cluster (use a quorum of your clusterSize here)"
             Default: "2"
         - ClusterName:
             Description: "name of the crate cluster"
-            Default: "{{SenzaInfo.StackVersion}}" # defaults to stack version, 
-                                                  # so crate nodes of different deployments 
-                                                  # do not see each other
         - HeapSize:
             Description: "JVM Heap size for Crate (use half of available RAM but less than 32GB)"
             Default: "4g"
         - AvailabilityZones:
             Description: "AWS Availability Zones the Crate cluster nodes run in"
-            Default:
-                - "eu-west-1a"
-                - "eu-west-1b"
-                - "eu-west-1c"
+            Default: "eu-west-1a,eu-west-1b,eu-west-1c"
             # crate can discover peer nodes within different regions
             # so many more could be listed
         - ScalyrAccountKey:
@@ -35,7 +29,7 @@ SenzaInfo:
 SenzaComponents:
     - Configuration:
         Type: Senza::StupsAutoConfiguration
-        AvailabilityZones: {{Arguments.AvailabilityZones}}
+        AvailabilityZones: "{{Arguments.AvailabilityZones}}"
     - CrateCluster:
         Type: Senza::TaupageAutoScalingGroup
         InstanceType: "c3.2xlarge"
@@ -49,8 +43,8 @@ SenzaComponents:
             # we don't really autoscale dynamically
             # add nodes by updating this stack with senza update
             # the autoscaling group will create a new node
-            Minimum: "{{Arguments.ClusterSize}}"
-            Maximum: "{{Arguments.ClusterSize}}"
+            Minimum: 3
+            Maximum: 3
             MetricType: CPU
         AssociatePublicIpAddress: false
         TaupageConfig:
@@ -58,7 +52,7 @@ SenzaComponents:
             runtime: Docker
             networking: host
             # TODO: put into another repo
-            source: "pierone.stups.zalan.do/mentoring/stups-crate:{{Arguments.ImageVersion}}"
+            source: "pierone.stups.zalan.do/mentoring/crate-stups:{{Arguments.ImageVersion}}"
             scalyr_account_key: "{{Arguments.ScalyrAccountKey}}"
             ports:
                 4200: 4200
@@ -103,31 +97,31 @@ Resources:
                 FromPort: 4300
                 ToPort: 4300
                 CidrIp: 0.0.0.0/0
-    Resources:
-          IamRole:
-              Type: AWS::IAM::Role
-              Properties:
-                  AssumeRolePolicyDocument:
-                      Version: "2012-10-17"
-                      Statement:
-                          - Effect: Allow
-                            Principal:
-                                Service: ec2.amazonaws.com
-                            Action: sts:AssumeRole
-                  Path: /
-                  Policies:
-                      - PolicyName: AmazonS3MintBucketAccess
-                        PolicyDocument:
-                            Version: "2012-10-17"
-                            Statement:
-                                - Effect: Allow
-                                  Action: s3:GetObject
-                                  Resource: "arn:aws:s3:::{{Arguments.MintBucket}}/{{Arguments.ApplicationId}}/*"
-                      - PolicyName: AmazonEC2APIAccess
-                        PolicyDocument:
-                            Version: "2012-10-17"
-                            Statement:
-                                - Effect: Allow
-                                  Action:
-                                      - ec2:DescribeInstances
-                                  Resource: "*"
+    IamRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ec2.amazonaws.com
+              Action: sts:AssumeRole
+        Path: /
+        Policies:
+          - PolicyName: AmazonS3MintBucketAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Sid: AllowMintRead
+                  Action: s3:GetObject
+                  Resource: "arn:aws:s3:::{{Arguments.MintBucket}}/{{Arguments.ApplicationId}}/*"
+          - PolicyName: AmazonEC2APIAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ec2:DescribeInstances
+                  Resource: "*"
