@@ -1,6 +1,6 @@
-docker_build: 
+build:
 	./generate-scm-source.sh
 	docker build -t $(DOCKER_IMAGE) .
 
 .PHONY:
-	docker_build
+	build

@@ -9,9 +9,6 @@ SenzaInfo:
             Description: The Mint bucket to use for getting credentials and stuff
         - ClusterName:
             Description: "name of the crate cluster"
-        - MinimumMasterNodes:
-            Description: "The minimum of master nodes necessary to form a cluster (use a quorum of your clusterSize here)"
-            Default: "2"
         - HeapSize:
             Description: "JVM Heap size for Crate (use half of available RAM but less than 32GB)"
             Default: "4g"
@@ -46,6 +43,9 @@ SenzaComponents:
             source: "{{Arguments.DockerImage}}"
             scalyr_account_key: "{{Arguments.ScalyrAccountKey}}"
             mint_bucket: "{{Arguments.MintBucket}}"
+            health_check_port: 9200
+            # requires the crate setting es.api.enabled: true
+            health_check_path: /_cluster/health
             ports:
                 4200: 4200
                 4300: 4300
@@ -69,7 +69,9 @@ SenzaComponents:
                     Fn::GetAtt:
                         - StupsCrateSg
                         - GroupId
-                MINIMUM_MASTER_NODES: "{{Arguments.MinimumMasterNodes}}"
+                # TODO calculate this depending on the number of nodes in the cluster,
+                # once it is dynamic
+                MINIMUM_MASTER_NODES: 2
 Resources:
     StupsCrateSg:
         Type: AWS::EC2::SecurityGroup
@@ -114,6 +116,6 @@ Resources:
               Statement:
                 - Effect: Allow
                   Action:
-                    # needed for aws discovery
+                    # needed for crate aws discovery
                     - ec2:DescribeInstances
                   Resource: "*"
