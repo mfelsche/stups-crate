@@ -1,35 +1,26 @@
 SenzaInfo:
     StackName: crate
     Parameters:
-        - ImageVersion:
-            Description: "stups-crate DockerImage Version to use, corresponds to crate release version"
+        - DockerImage:
+            Description: "stups-crate DockerImage to use, including image tag (e.g. pierone.stups.example.org/team/stups-crate:0.54.6)"
         - ApplicationId:
             Description: "The application id according to yourturn"
         - MintBucket:
             Description: The Mint bucket to use for getting credentials and stuff
-        - ClusterSize:
-            Description: "intended initial size of the cluster"
-            Default: 3
+        - ClusterName:
+            Description: "name of the crate cluster"
         - MinimumMasterNodes:
             Description: "The minimum of master nodes necessary to form a cluster (use a quorum of your clusterSize here)"
             Default: "2"
-        - ClusterName:
-            Description: "name of the crate cluster"
         - HeapSize:
             Description: "JVM Heap size for Crate (use half of available RAM but less than 32GB)"
             Default: "4g"
-        - AvailabilityZones:
-            Description: "AWS Availability Zones the Crate cluster nodes run in"
-            Default: "eu-west-1a,eu-west-1b,eu-west-1c"
-            # crate can discover peer nodes within different regions
-            # so many more could be listed
         - ScalyrAccountKey:
             Description: "scalyr account key"
             Default: "NOT USED"
 SenzaComponents:
     - Configuration:
         Type: Senza::StupsAutoConfiguration
-        AvailabilityZones: "{{Arguments.AvailabilityZones}}"
     - CrateCluster:
         Type: Senza::TaupageAutoScalingGroup
         InstanceType: "c3.2xlarge"
@@ -43,6 +34,7 @@ SenzaComponents:
             # we don't really autoscale dynamically
             # add nodes by updating this stack with senza update
             # the autoscaling group will create a new node
+            # TODO: make those values settable from parameters (some python/templating error)
             Minimum: 3
             Maximum: 3
             MetricType: CPU
@@ -51,9 +43,9 @@ SenzaComponents:
             application_id: "{{Arguments.ApplicationId}}"
             runtime: Docker
             networking: host
-            # TODO: put into another repo
-            source: "pierone.stups.zalan.do/mentoring/crate-stups:{{Arguments.ImageVersion}}"
+            source: "{{Arguments.DockerImage}}"
             scalyr_account_key: "{{Arguments.ScalyrAccountKey}}"
+            mint_bucket: "{{Arguments.MintBucket}}"
             ports:
                 4200: 4200
                 4300: 4300
@@ -73,16 +65,11 @@ SenzaComponents:
             environment:
                 CLUSTER_NAME: "{{Arguments.ClusterName}}"
                 CRATE_HEAP_SIZE: "{{Arguments.HeapSize}}"
-                AVAILABILITY_ZONES: "{{Arguments.AvailabilityZones}}"
                 AWS_SECURITY_GROUP:
                     Fn::GetAtt:
                         - StupsCrateSg
                         - GroupId
                 MINIMUM_MASTER_NODES: "{{Arguments.MinimumMasterNodes}}"
-    # TODO: 
-    # WeightedDnsElasticLoadBalancer
-    #       HTTPPort: 9200
-    #       HealthCheckPath: /_cluster/health
 Resources:
     StupsCrateSg:
         Type: AWS::EC2::SecurityGroup
@@ -96,6 +83,10 @@ Resources:
               - IpProtocol: tcp # Transport
                 FromPort: 4300
                 ToPort: 4300
+                CidrIp: 0.0.0.0/0
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
                 CidrIp: 0.0.0.0/0
     IamRole:
       Type: AWS::IAM::Role
@@ -123,5 +114,6 @@ Resources:
               Statement:
                 - Effect: Allow
                   Action:
+                    # needed for aws discovery
                     - ec2:DescribeInstances
                   Resource: "*"
