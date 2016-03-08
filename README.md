@@ -1,8 +1,8 @@
 # stups-crate
 
-stups appliance for the Crate.IO database
+[stups](https://stups.io/) appliance for the [Crate.IO](https://crate.io) database.
 
-This stups appliance is used to create a docker image
+This [stups](https://stups.io/) appliance is used to create a docker image
 that can be deployed to AWS using the senza definition in `stups-crate.yaml`.
 
 In its current form it creates a 3 node cluster on `c3.2xlarge` instances
@@ -24,7 +24,8 @@ path:
 
 ## Docker
 
-It is important to have a stups-compliant docker image to include a current scm-source.json.
+It is important to have a stups-compliant docker image to include 
+a current `scm-source.json` in the root folder.
 Use `make` to build your docker image:
 
 ```sh
@@ -32,6 +33,8 @@ $ DOCKER_IMAGE=pierone.stups.example.org/team/stups-crate:0.54.6 make build
 ```
 
 ## Parameters
+
+These are the parameters for calling `senza create` to deploy crate to AWS:
 
  - `DockerImage`
     The name and tag of the stups-crate docker image to use.
